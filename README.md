@@ -95,8 +95,6 @@ GROQ_MODEL=llama-3.3-70b-versatile
 GROQ_TEMPERATURE=0.1
 ```
 
-Never commit `.env`. It is ignored by Git.
-
 Seed the local database:
 
 ```bash
@@ -126,17 +124,19 @@ Open:
 http://127.0.0.1:8000/docs
 ```
 
-## API demonstration
+## API reference
 
-1. Call `GET /health`.
-2. Call `GET /candidate-pairs?limit=10`.
-3. Choose a pair and call `POST /candidate-pairs/{pair_id}/investigate`.
-4. Inspect the draft, evidence IDs, tool calls and model attempts.
-5. Call `GET /investigations` to list items awaiting review.
-6. Call `POST /investigations/{id}/decision` with a human decision.
-7. Call `GET /investigations/{id}/trace` and verify the human decision is the final event.
+Interactive OpenAPI documentation is available at `/docs`.
 
-Approval request:
+- `GET /health` reports API health and database seed status.
+- `GET /candidate-pairs` returns deterministic candidate pairs. The optional `limit` parameter controls the number returned.
+- `POST /candidate-pairs/{pair_id}/investigate` starts a bounded investigation or returns the existing investigation for that pair.
+- `GET /investigations` returns investigations filtered by status. The default status is `PENDING_REVIEW`.
+- `GET /investigations/{id}` returns an investigation, its recommendation, and its evidence trace.
+- `GET /investigations/{id}/trace` returns the append-only trace in sequence order.
+- `POST /investigations/{id}/decision` records an `APPROVE`, `REJECT`, or `OVERRIDE` human decision.
+
+Example approval request:
 
 ```json
 {
@@ -146,7 +146,7 @@ Approval request:
 }
 ```
 
-Override request:
+Example override request:
 
 ```json
 {
@@ -166,19 +166,6 @@ fuzzy account similarity >= 85
 OR same nonempty normalized contact email
 OR subject-token Jaccard overlap >= 0.5
 ```
-
-This stage intentionally favors recall. It does not decide duplication.
-
-Account text is Unicode-normalized, lowercased, and stripped of punctuation. Emails are trimmed and compared case-insensitively. A small local stop-word set removes non-informative subject tokens.
-
-`channel`, `status`, `priority`, `description`, and strict time windows are not candidate filters:
-
-- duplicates may arrive through different channels;
-- operational metadata may change after submission;
-- a time cutoff could discard delayed follow-ups;
-- boilerplate descriptions would create many false positives.
-
-The supplied 269 records produce 2,529 candidates. Only a capped subset needs LLM investigation.
 
 ## Part 2: agent design
 
@@ -438,8 +425,6 @@ Portal login description: 15 cases across 10 accounts
 New user provisioning description: 18 cases across 15 accounts
 ```
 
-This is why a 100% text score is treated as potentially weak evidence.
-
 ## Trade-offs
 
 ### Recall over candidate precision
@@ -448,7 +433,7 @@ Part 1 generates many false positives, including shared templates. This follows 
 
 ### Hand-written loop over an agent framework
 
-A plain loop keeps model choice, bounds, evidence, and state transitions visible. LangGraph or LangChain would add dependencies without improving the assignment's core behavior.
+A plain loop keeps model choice, bounds, evidence, and state transitions visible. A future implementation could migrate the same state, tool, and transition contracts to LangGraph or LangChain as workflow complexity grows.
 
 ### SQLite over a service database
 
@@ -469,7 +454,6 @@ The API performs the bounded investigation during the request. A production impl
 - Fuzzy text score is lexical rather than semantic.
 - A free model may still produce conservative or imperfect interpretations.
 - Evidence IDs guarantee provenance but do not prove that every natural-language claim perfectly summarizes its tool result.
-- SQLite is not intended for high-write multi-worker deployment.
 - Authentication is intentionally omitted by assignment scope.
 - Local runtime database contents are ignored and are not part of the repository.
 
@@ -484,34 +468,8 @@ The API performs the bounded investigation during the request. A production impl
 7. Add metrics for model latency, retries, tool usage, overrides, and drift.
 8. Add prompt regression tests using the difficult cases identified here.
 
-## Suggested 10-minute walkthrough
+## Development disclosure
 
-### Four minutes: end-to-end demonstration
+Approximate time spent: four hours.
 
-- List candidate pairs.
-- Open a template-collision or prompt-injection pair.
-- Show the model selecting tools.
-- Show accumulated evidence and the pending draft.
-- Approve or override through `/docs`.
-- Show the appended human-decision trace event.
-
-### Three minutes: architecture
-
-- Explain candidate recall versus agent precision.
-- Show the tool registry and bounded loop.
-- Explain model, Python, and human responsibilities.
-- Show schema validation and append-only storage.
-
-### Three minutes: findings and next steps
-
-- Explain boilerplate collisions.
-- Explain prompt-injection handling.
-- Discuss heuristic thresholds, evaluation data, semantic retrieval, and production persistence.
-
-## Time spent
-
-Approximately four hours.
-
-## AI-assistant disclosure
-
-I used Cursor's AI coding assistant for architecture discussion, implementation support, test generation, prompt iteration, and README drafting. I reviewed the proposed changes incrementally, asked for explanations of design decisions, ran the tests and real Groq investigations locally, and made the human approve/override decisions through the API. I am prepared to explain and defend the submitted code.
+Cursor's AI coding assistant supported planning, implementation, testing, prompt refinement, and documentation. All changes were reviewed incrementally, and the test suite and end-to-end Groq investigations were run locally.

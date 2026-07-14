@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Any
 from typing import Literal
+from typing import Optional
 from typing import Union
 
 from pydantic import BaseModel
@@ -17,6 +18,12 @@ class VerdictValue(str, Enum):
     DUPLICATE = "DUPLICATE"
     NOT_DUPLICATE = "NOT_DUPLICATE"
     UNSURE = "UNSURE"
+
+
+class HumanDecisionValue(str, Enum):
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+    OVERRIDE = "OVERRIDE"
 
 
 class ToolName(str, Enum):
@@ -101,6 +108,33 @@ class CallToolAction(StrictModel):
 class DraftVerdictAction(StrictModel):
     action: Literal["DRAFT_VERDICT"]
     recommendation: DraftVerdict
+
+
+class HumanDecisionRequest(StrictModel):
+    decision: HumanDecisionValue
+    reviewer: str = Field(min_length=1)
+    notes: Optional[str] = None
+    override_verdict: Optional[VerdictValue] = None
+
+    @model_validator(mode="after")
+    def validate_override(self):
+        if (
+            self.decision == HumanDecisionValue.OVERRIDE
+            and self.override_verdict is None
+        ):
+            raise ValueError(
+                "OVERRIDE requires override_verdict"
+            )
+
+        if (
+            self.decision != HumanDecisionValue.OVERRIDE
+            and self.override_verdict is not None
+        ):
+            raise ValueError(
+                "override_verdict is only valid for OVERRIDE"
+            )
+
+        return self
 
 
 AgentAction = Union[

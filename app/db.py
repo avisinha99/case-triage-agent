@@ -351,6 +351,35 @@ def list_candidate_pairs(
         connection.close()
 
 
+def get_candidate_pair(
+    candidate_pair_id: int,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> Optional[dict]:
+    connection = connect_database(db_path)
+
+    try:
+        row = connection.execute(
+            """
+            SELECT id, case_a_id, case_b_id, reasons_json
+            FROM candidate_pairs
+            WHERE id = ?
+            """,
+            (candidate_pair_id,),
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return {
+            "id": row["id"],
+            "case_a_id": row["case_a_id"],
+            "case_b_id": row["case_b_id"],
+            "reasons": json.loads(row["reasons_json"]),
+        }
+    finally:
+        connection.close()
+
+
 def create_investigation(
     candidate_pair_id: int,
     max_steps: int,
@@ -419,6 +448,31 @@ def claim_investigation(
             )
 
         return cursor.rowcount == 1
+    finally:
+        connection.close()
+
+
+def mark_investigation_failed(
+    investigation_id: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> None:
+    connection = connect_database(db_path)
+
+    try:
+        with connection:
+            connection.execute(
+                """
+                UPDATE investigations
+                SET status = 'FAILED',
+                    updated_at = ?
+                WHERE id = ?
+                  AND status = 'RUNNING'
+                """,
+                (
+                    utc_now(),
+                    investigation_id,
+                ),
+            )
     finally:
         connection.close()
 
@@ -743,6 +797,30 @@ def get_investigation(
             )
 
         return result
+    finally:
+        connection.close()
+
+
+def get_investigation_for_pair(
+    candidate_pair_id: int,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> Optional[dict]:
+    connection = connect_database(db_path)
+
+    try:
+        row = connection.execute(
+            """
+            SELECT id
+            FROM investigations
+            WHERE candidate_pair_id = ?
+            """,
+            (candidate_pair_id,),
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return get_investigation(row["id"], db_path)
     finally:
         connection.close()
 

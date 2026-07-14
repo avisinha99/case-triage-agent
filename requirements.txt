@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+pydantic
+rapidfuzz
+groq
+python-dotenv
+pytest
